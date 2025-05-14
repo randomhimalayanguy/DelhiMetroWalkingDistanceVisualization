@@ -3,41 +3,30 @@ import requests
 import pandas as pd
 import re
 import folium
+import os
 
 
-try:
-    stations = pd.read_csv('Metro_stations.csv')  # Contains 'Station', 'Latitude', 'Longitude'
-    stations = stations.dropna()
-
-    # Create a base map centered on Delhi
-    m = folium.Map(location=[28.6139, 77.2090], zoom_start=11)
+# We are getting coordinates data in the form of degree, min and sec, converting it to decimals
+def dms_to_dd(dms_str):
+    # Example: '28°42′59.526″N' -> 28.716535
+    if not dms_str:
+        return None
     
-    # Add circles for each station
-    for index, row in stations.iterrows():
-        folium.Circle(
-            location=[row['latitude'], row['longitude']],
-            radius=1000,  #  1km
-            color='blue',
-            fill=True,
-            fill_opacity=0.2,
-            popup=row['Station Name']
-        ).add_to(m)
+    # Strip the string -> °, ′, ″, N S E W
+    match = re.match(r"(\d+)°(\d+)′([\d.]+)″([NSEW])", dms_str.strip())
+    if not match:
+        return None
 
-        folium.Marker(
-            location=[row['latitude'], row['longitude']],
-            popup=folium.Popup(row['Station Name'], parse_html=True),
-            icon=folium.Icon(color='red', icon='info-sign')
-        ).add_to(m)
-    # Save the map to an HTML file
-    m.save('delhi_metro_1km_circles.html')
-    print(len(stations))
+    degrees, minutes, seconds, direction = match.groups()
+    dd = float(degrees) + float(minutes)/60 + float(seconds)/3600
 
-except:
-    print("There is a problem")
+    if direction in ['S', 'W']:
+        dd *= -1
+
+    return round(dd, 6)
 
 
-
-def generate_metro_station_csv():
+def generate_metro_station_csv(output_name):
     # URL from which data is fetched
     URL = "https://en.wikipedia.org/wiki/List_of_Delhi_Metro_stations"
     page = requests.get(URL)
@@ -49,8 +38,8 @@ def generate_metro_station_csv():
     table = tables[2] # Our requried table 3rd table
 
     stations = [] # To store names of stations
-    lat = []    # To store latitude of stations
-    long = []   # To store longitude of stations
+    latitude = []    # To store latitude of stations
+    longitude = []   # To store longitude of stations
 
     # Set to store colors of metro lines, useful since table is not perfectly formatted
     colors = {"Pink", "Violet", "Yellow", "Blue", "Red", 
@@ -78,40 +67,62 @@ def generate_metro_station_csv():
                         page = requests.get(cur_station_page_link)
                         new_soup = BeautifulSoup(page.text, "html.parser")
 
-                        latitude = new_soup.find("span", attrs={"class":["latitude"]})
-                        longitude = new_soup.find("span", attrs={"class":["longitude"]})
-                        if latitude:
-                            lat.append(dms_to_dd(latitude.text))
-                            long.append(dms_to_dd(longitude.text))
-                        else:
-                            lat.append(None)
-                            long.append(None)
+                        cur_latitude = new_soup.find("span", attrs={"class":["latitude"]})
+                        cur_longitude = new_soup.find("span", attrs={"class":["longitude"]})
+                        
+                        # Add coordinates if exist, else add None
+                        latitude.append(dms_to_dd(cur_latitude.text) if cur_latitude else None)
+                        longitude.append(dms_to_dd(cur_longitude.text) if cur_longitude else None)
+
 
         # Creating dataframe
-        df = pd.DataFrame({"Station Name" : stations, "latitude":lat, "longitude":long})
+        df = pd.DataFrame({"Station Name" : stations, "latitude":latitude, "longitude":longitude})
         print(df.head())    # Printing the head of dataframe
-        df.to_csv("Metro_stations.csv") # Exporting the .csv file
+        df.to_csv(output_name) # Exporting the .csv file
 
     # If correct table is not found
     else:
         print("Table not found")
 
 
-# We are getting coordinates data in the form of degree, min and sec, converting it to decimals
-def dms_to_dd(dms_str):
-    # Example: '28°42′59.526″N' -> 28.716535
-    if not dms_str:
-        return None
+CSV_FILE_PATH = "Metro_stations.csv"
+map_file_name = "delhi_metro_1km_circles"
+
+
+if not os.path.exists(CSV_FILE_PATH):
+    print("File does not exist, Generating file")
+    generate_metro_station_csv(CSV_FILE_PATH)
+
+
+try:
+    stations = pd.read_csv(CSV_FILE_PATH)  # Contains 'Station', 'Latitude', 'Longitude'
+    stations_without_coord = stations[stations["latitude"].isnull()]
+    print(f"Stations which do not have coordinates. Total = {len(stations_without_coord)}\n", stations_without_coord["Station Name"])
+    stations = stations.dropna()
+
+    # Create a base map centered on Delhi
+    m = folium.Map(location=[28.6139, 77.2090], zoom_start=11)
     
-    # Strip the string -> °, ′, ″, N S E W
-    match = re.match(r"(\d+)°(\d+)′([\d.]+)″([NSEW])", dms_str.strip())
-    if not match:
-        return None
+    # Add circles for each station
+    for index, row in stations.iterrows():
+        folium.Circle(
+            location=[row['latitude'], row['longitude']],
+            radius=1000,  #  1km
+            color='blue',
+            fill=True,
+            fill_opacity=0.2,
+            popup=row['Station Name']
+        ).add_to(m)
 
-    degrees, minutes, seconds, direction = match.groups()
-    dd = float(degrees) + float(minutes)/60 + float(seconds)/3600
+        folium.Marker(
+            location=[row['latitude'], row['longitude']],
+            popup=folium.Popup(row['Station Name'], parse_html=True),
+            icon=folium.Icon(color='red', icon='info-sign')
+        ).add_to(m)
+    
+    # Save the map to an HTML file
+    m.save(f'{map_file_name}.html')
+    print("Total stations ", len(stations))
 
-    if direction in ['S', 'W']:
-        dd *= -1
-
-    return round(dd, 6)
+except Exception as e:
+    print(f"There is a problem, {e}")
