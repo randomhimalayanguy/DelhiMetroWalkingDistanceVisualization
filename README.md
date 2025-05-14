@@ -15,6 +15,24 @@ It then generates a CSV file and visualizes each station on an interactive Foliu
 - Highlights stations with missing coordinates
 
 ---
+## Metro stations CSV file - 
+
+|   | Station Name               | latitude  | longitude |
+| - | -------------------------- | --------- | --------- |
+| 0 | Adarsh Nagar metro station | 28.736534 | 77.163409 |
+| 1 | AIIMS metro station        | 28.567083 | 77.210226 |
+| 2 | Akshardham metro station   | 28.613338 | 77.277326 |
+| 3 | Anand Vihar metro station  | 28.647884 | 77.315540 |
+| 4 | Arjan Garh metro station   | 28.480299 | 77.125617 |
+
+---
+
+## Map output
+
+![image](https://github.com/user-attachments/assets/61502f87-6427-45d8-ad76-6e91cf1c1ecc)
+
+
+---
 
 ## Requirements
 
